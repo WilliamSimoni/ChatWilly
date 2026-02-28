@@ -26,7 +26,6 @@ async def chat_endpoint(request: Request, body: ChatRequest):
 
     async def event_generator():
         try:
-            # version="v2" is required for the modern LangChain events API
             async for event in agent.astream_events(
                 {"messages": formatted_messages}, 
                 version="v2"
@@ -34,37 +33,26 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                 kind = event["event"]
                 metadata = event["metadata"]
                 
-                # 1. Stream tokens from the response LLM
                 if kind == "on_chat_model_stream":
-                    # Filter: Only yield tokens if the current active node is "response_generation".
-                    # This prevents streaming the "guardrail_input" agent's internal thought process!
                     node_name = event.get("metadata", {}).get("langgraph_node")
                     checkpoint_ns = metadata.get("checkpoint_ns", "")
 
                     if node_name == "model" and "response_generation" in checkpoint_ns:
                         content = event["data"]["chunk"].content
                         if content:
-                            # It's best practice to JSON encode SSE data so newlines 
-                            # don't break the Server-Sent Event formatting.
                             data = json.dumps({"content": content})
                             yield f"data: {data}\n\n"
                             
-                # 2. Handle the guardrail block
-                # Because it's a static function and doesn't use an LLM, it won't trigger `on_chat_model_stream`.
-                # We catch its completion event instead.
                 elif kind == "on_chain_end" and event["name"] == "guardrail_block":
                     output = event["data"].get("output", {})
                     if "messages" in output and output["messages"]:
-                        # Extract the static AIMessage content we set in graph.py
                         content = output["messages"][-1].content
                         data = json.dumps({"content": content})
                         yield f"data: {data}\n\n"
 
-            # Optional but recommended: Send a standard DONE signal when generation finishes
             yield "data: [DONE]\n\n"
             
         except Exception as e:
-            # Yield an error cleanly to the frontend if something fails during streaming
             error_data = json.dumps({"error": str(e)})
             yield f"data: {error_data}\n\n"
 
