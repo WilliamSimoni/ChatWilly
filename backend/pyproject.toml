@@ -1,0 +1,50 @@
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "chatwilly-backend"
+version = "0.1.0"
+description = "Backend ChatWilly"
+readme = "README.md"
+requires-python = ">=3.14"
+authors =[
+    { name = "William Simoni" }
+]
+dependencies =[
+    "fastapi==0.134.0",
+    "uvicorn[standard]==0.41.0",
+    "pydantic==2.12.5",
+    "redis[asyncio]==7.2.1",
+    "langchain==1.2.10",
+    "langchain-openai==1.1.10",
+    "langchain-core==1.2.16",
+    "langgraph==1.0.10",
+    "PyYAML==6.0.3",
+    "pydantic-settings==2.13.1",
+    "python-dotenv"
+]
+
+[project.optional-dependencies]
+dev =[
+    "pytest",
+    "ruff",
+    "mypy",
+    "pre-commit"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include =["chatwilly_backend*"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+select =["E", "F", "I"]
+pythonpath = [
+    "src",
+]
+testpaths =[
+    "tests",
+]

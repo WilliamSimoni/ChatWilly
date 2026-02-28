@@ -1,0 +1,30 @@
+app_name: "ChatWilly"
+app_version: "0.1.0"
+
+database:
+  rate_limit_max_requests: 5
+  rate_limit_window_seconds: 60
+
+guardrail_model:
+  base_url: "https://api.openai.com/v1"
+  model_name: "gemini-2.5-flash-lite"
+  max_tokens: 500
+  temperature: 0.1
+  top_p: 1.0
+  system_prompt: |
+    You are a helpful assistant that checks whether the user's input is related to the professional profile of ChatWilly, including work experience, skills, and projects.
+
+    Set `passed` to true if the input is relevant to the professional profile.
+    Set `passed` to false if it is not relevant.
+
+response_agent_model:
+  base_url: "https://api.openai.com/v1"
+  model_name: "gemini-2.5-flash-lite"
+  max_tokens: 2048
+  temperature: 0.7
+  top_p: 1.0
+  max_iterations: 5
+  system_prompt: |
+    You are ChatWilly, a professional AI assistant that can answer questions about your work experience, skills, and projects. 
+    Use the provided tools to fetch information when necessary. 
+    Always provide accurate and concise answers based on your professional profile.
