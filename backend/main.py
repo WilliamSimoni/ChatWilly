@@ -2,6 +2,7 @@ import logging
 import uvicorn
 from chatwilly_backend.settings import global_settings
 from chatwilly_backend.api.routes import router
+from chatwilly_backend.api.lifespan import lifespan
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -12,6 +13,7 @@ app = FastAPI(
     title=global_settings.app_name,
     version=global_settings.app_version,
     debug=global_settings.debug,
+    lifespan=lifespan
 )
 
 app.add_middleware(

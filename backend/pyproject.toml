@@ -6,7 +6,7 @@ name = "chatwilly-backend"
 version = "0.1.0"
 description = "Backend ChatWilly"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.13"
 authors =[
     { name = "William Simoni" }
 ]
@@ -21,6 +21,7 @@ dependencies =[
     "langgraph==1.0.10",
     "PyYAML==6.0.3",
     "pydantic-settings==2.13.1",
+    "pyrate-limiter==4.0.2",
     "python-dotenv"
 ]
 
@@ -38,7 +39,7 @@ include =["chatwilly_backend*"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select =["E", "F", "I"]

@@ -1,5 +1,7 @@
+from chatwilly_backend.api.rate_limit import RateLimit
 from chatwilly_backend.settings import global_settings
 from fastapi import APIRouter, Request, HTTPException
+from fastapi.params import Depends
 from fastapi.responses import StreamingResponse
 from chatwilly_backend.api.route_models import ChatRequest
 from chatwilly_backend.graph import agent 
@@ -15,9 +17,10 @@ router = APIRouter()
             "content": {"text/event-stream": {}},
             "description": "Server-Sent Events stream"
         }
-    }
+    },
+    dependencies=[Depends(RateLimit(global_settings.rate_limit_timeout))],
 )
-async def chat_endpoint(request: Request, body: ChatRequest):
+async def chat_endpoint(body: ChatRequest):
 
     if not body.messages:
         raise HTTPException(status_code=400, detail="La lista messaggi è vuota.")
@@ -34,7 +37,7 @@ async def chat_endpoint(request: Request, body: ChatRequest):
                 metadata = event["metadata"]
                 
                 if kind == "on_chat_model_stream":
-                    node_name = event.get("metadata", {}).get("langgraph_node")
+                    node_name = metadata.get("langgraph_node")
                     checkpoint_ns = metadata.get("checkpoint_ns", "")
 
                     if node_name == "model" and "response_generation" in checkpoint_ns:

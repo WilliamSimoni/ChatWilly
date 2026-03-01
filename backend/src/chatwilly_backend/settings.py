@@ -14,10 +14,9 @@ BACKEND_ROOT_DIR = Path(__file__).parent.parent.parent
 CONFIG_PATH = os.getenv("CONFIG_PATH", BACKEND_ROOT_DIR / "config.yaml")
 ENV_PATH = os.getenv("ENV_PATH", BACKEND_ROOT_DIR / ".env")
 
-class DatabaseConfig(BaseModel):
-    redis_url: str = "redis://localhost:6379"
-    rate_limit_max_requests: int = 5
-    rate_limit_window_seconds: int = 60
+class RedisConfig(BaseModel):
+    enabled: bool = False
+    url: str = "redis://localhost:6379"
 
 class AIModelConfig(BaseModel):
     base_url: str = "https://api.openai.com/v1"
@@ -50,9 +49,14 @@ class Settings(BaseSettings):
     app_name: str = "ChatWilly"
     app_version: str = "0.1.0"
     app_port: int = 8000
+    
+    #rate limit settings
+    rate_limit_max_requests: int = 5
+    rate_limit_window_seconds: int = 60
+    rate_limit_timeout: int = 10
 
     # Map the nested configuration
-    database: DatabaseConfig = DatabaseConfig()
+    redis: RedisConfig = RedisConfig()
     
     # Root level configurations
     debug: bool = False

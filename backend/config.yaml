@@ -1,9 +1,11 @@
 app_name: "ChatWilly"
 app_version: "0.1.0"
 
-database:
-  rate_limit_max_requests: 5
-  rate_limit_window_seconds: 60
+rate_limit_max_requests: 5
+rate_limit_window_seconds: 60
+
+redis:
+  enabled: false
 
 guardrail_model:
   base_url: "https://api.openai.com/v1"
