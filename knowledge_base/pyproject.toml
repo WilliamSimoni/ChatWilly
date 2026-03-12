@@ -2,28 +2,24 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "chatwilly-backend"
+name = "chatwilly-knowledge"
 version = "0.1.0"
-description = "Backend ChatWilly"
+description = "Backend Knowledge"
 readme = "README.md"
 requires-python = ">=3.13"
 authors =[
     { name = "William Simoni" }
 ]
 dependencies =[
-    "fastapi==0.134.0",
-    "uvicorn[standard]==0.41.0",
     "pydantic==2.12.5",
-    "redis[asyncio]==7.2.1",
     "langchain==1.2.10",
     "langchain-openai==1.1.10",
     "langchain-core==1.2.16",
     "langgraph==1.0.10",
     "PyYAML==6.0.3",
     "pydantic-settings==2.13.1",
-    "pyrate-limiter==4.0.2",
-    "python-dotenv",
-    "qdrant-client==1.17.0"
+    "pypdf==6.7.5",
+    "python-docx==1.2.0"
 ]
 
 [project.optional-dependencies]

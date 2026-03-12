@@ -1,0 +1,17 @@
+debug: true
+
+max_document_characters: 60000
+
+extractor_model:
+  base_url: "https://api.openai.com/v1"
+  model_name: "gemini-flash-latest"
+  max_tokens: 16000
+  temperature: 0.1
+  top_p: 1.0
+
+qdrant:
+  url: "http://localhost:6333"
+  collection_name: "chatwilly_brain"
+
+document_folder: "./docs"
+staging_folder: "./staging"
