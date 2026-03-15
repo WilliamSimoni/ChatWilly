@@ -1,0 +1,41 @@
+/* 1. Import a premium geometric sans-serif font to match your design */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap');
+
+/* 2. Import Tailwind v4 */
+@import "tailwindcss";
+
+/* 3. Tailwind v4 Theme Configuration (Replaces tailwind.config.js) */
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+}
+
+/* 4. Base layer styles for a polished UI */
+@layer base {
+  html, body {
+    @apply antialiased bg-[#FCFAF6] text-[#1B233A] min-h-screen m-0 p-0;
+  }
+
+  /* Smooth scrolling for the chat and page transitions */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom minimal scrollbar to match the modern design */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-gray-200 rounded-full;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-gray-300;
+  }
+
+  /* Removes the default blue outline on mobile tap */
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

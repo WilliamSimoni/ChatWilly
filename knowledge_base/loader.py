@@ -127,7 +127,7 @@ def run_loader():
             ),
         )
 
-        print(f"🚀 Embedding & Uploading {source_filename} ({len(chunks)} chunks)...")
+        print(f"Embedding & Uploading {source_filename} ({len(chunks)} chunks)...")
 
         texts_to_embed = []
         payloads = []

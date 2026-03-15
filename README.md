@@ -2,20 +2,29 @@
 
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688?style=flat&logo=fastapi)](https://fastapi.tiangolo.com/)
 [![Docker](https://img.shields.io/badge/Deployed_with-Docker-2496ED?style=flat&logo=docker)](https://www.docker.com/)
+[![Mistral AI](https://img.shields.io/badge/Model-Mistral_AI-FF6000?style=flat&logo=mistralai)](https://mistral.ai/)
 [![Qdrant](https://img.shields.io/badge/Vector_DB-Qdrant-FE3C88?style=flat&logo=qdrant)](https://qdrant.tech/)
+[![React](https://img.shields.io/badge/Frontend-React-61DAFB?style=flat&logo=react)](https://reactjs.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Styling-Tailwind_CSS-38B2AC?style=flat&logo=tailwind-css)](https://tailwindcss.com/)
 
 ## What is this?
 **ChatWilly** is a full-stack, Agentic RAG (Retrieval-Augmented Generation) application designed to act as my digital clone for job interviews.
 
 Instead of reading a static PDF resume, recruiters and engineering managers can chat directly with this AI. The agent uses my real background, projects, and skills to answer technical, behavioral, and logistical questions exactly as I would.
 
+<p align="center">
+  <img src="./assets/chatwilly_logo.png" width="800" alt="Application Screenshot">
+</p>
+
+
 ## Architecture & Tech Stack
 This project is built as a **Monorepo** following Clean Architecture principles, strictly separating the offline data ingestion from the runtime API.
 
-*   **Runtime Backend:** Python 3.13+, FastAPI, LangGraph.
+*   **Runtime Backend:** Python 3.13+, FastAPI, LangGraph, **LiteLLM**.
 *   **Data Pipeline (ETL):** Python, LangChain, Pydantic Structured Output.
 *   **Vector Database:** Qdrant.
 *   **Caching & Rate Limiting:** Redis.
+*   **Frontend:** React (Vite), Tailwind CSS, Server-Sent Events (SSE) for streaming.
 
 ### Monorepo Structure
 ```text
@@ -32,9 +41,8 @@ This project is built as a **Monorepo** following Clean Architecture principles,
 2.  **High-Fidelity Data Pipeline (ETL):** My raw CVs and portfolios are processed by an offline pipeline. An LLM acts as my "Biographer", extracting self-contained narrative chunks (STAR method) and generating global summaries to prevent RAG "Context Loss" (Contextual Embeddings). Data is staged in YAML for human review and synced idempotently to Qdrant via MD5 hashing.
 3.  **Cost & Context Guardrails:**
     *   A lightweight LLM router intercepts the user's input before hitting the main Agent. If the question is off-topic (e.g., *"Write me a recipe"*), the request is blocked, saving tokens and keeping the AI in character.
-    *   The frontend limits the conversation context to the last 5 messages.
 4.  **Strict Rate Limiting (Anti-Abuse):** The FastAPI backend connects to Redis to track incoming requests.
-
+5.  **Model-Agnostic via LiteLLM:** Switching from Mistral to OpenAI or Anthropic is a 1-line change in the `.env` file, thanks to the LiteLLM abstraction layer.
 ---
 
 ## Running with Docker Compose
@@ -68,20 +76,27 @@ DEBUG=True
 APP_PORT=8000
 
 # Database
-REDIS__URL=redis://redis:6379
+REDIS__URL="redis://redis:6379"
 
-# Guardrail Model
-GUARDRAIL_MODEL__API_KEY=YOURAPIKEY
-GUARDRAIL_MODEL__BASE_URL=YOURBASEURL
+# Guardrail Model (LiteLLM Format)
+GUARDRAIL_MODEL__API_KEY="your-mistral-api-key"
+GUARDRAIL_MODEL__BASE_URL="https://api.mistral.ai/v1/"
+GUARDRAIL_MODEL__MODEL_NAME="mistral/mistral-small-2506"
 
-# Response Agent Model
-RESPONSE_AGENT_MODEL__API_KEY=YOURAPIKEY
-RESPONSE_AGENT_MODEL__BASE_URL=YOURBASEURL
+# Response Agent Model (Mistral Large)
+RESPONSE_AGENT_MODEL__API_KEY="your-mistral-api-key"
+RESPONSE_AGENT_MODEL__BASE_URL="https://api.mistral.ai/v1/"
+RESPONSE_AGENT_MODEL__MODEL_NAME="mistral/mistral-large-2512"
 
-# Embedding Model & Qdrant (for RAG Retrieval)
-EMBEDDING_MODEL__API_KEY=YOURAPIKEY
-EMBEDDING_MODEL__MODEL_NAME=text-embedding-3-small
-QDRANT__URL=http://qdrant:6333
+# Embedding Model (Example: Local Qwen via LM Studio/Ollama)
+EMBEDDING_MODEL__BASE_URL="http://localhost:1234/v1"
+EMBEDDING_MODEL__MODEL_NAME="text-embedding-qwen3-embedding-0.6b"
+EMBEDDING_MODEL__API_KEY="not-needed"
+
+# Qdrant Vector DB
+QDRANT__URL="http://localhost:6333"
+QDRANT__VECTOR_SIZE=1024
+QDRANT__COLLECTION_NAME="chatwilly_brain"
 ```
 *Note: Do **not** commit real API keys. Environment variables override values in `config.yaml`. Nested configuration uses `__` as delimiter (e.g. `REDIS__URL`).*
 
