@@ -18,10 +18,32 @@ const ChatPage = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [pressTimer, setPressTimer] = useState(null);
+  const [resetProgress, setResetProgress] = useState(0);
 
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handlePressStart = () => {
+    const start = Date.now();
+    const interval = setInterval(() => {
+      const progress = Math.min((Date.now() - start) / 2000, 1);
+      setResetProgress(progress);
+      if (progress >= 1) {
+        clearInterval(interval);
+        setMessages([{ role: 'assistant', content: "Hi! I'm ChatWilly. What would you like to know about William?" }]);
+        setResetProgress(0);
+      }
+    }, 16);
+    setPressTimer(interval);
+  };
+
+  const handlePressEnd = () => {
+    if (pressTimer) clearInterval(pressTimer);
+    setPressTimer(null);
+    setResetProgress(0);
+  };
 
   const API_BASE_URL = import.meta.env.BACKEND_API_URL || 'http://localhost:8000';
 
@@ -102,7 +124,40 @@ const ChatPage = () => {
             className="h-12 md:h-16 w-auto object-contain"
           />
         </div>
-        <Link to="/about" className="text-sm font-semibold hover:underline">About William</Link>
+        <div className="flex items-center gap-3">
+          <div
+            className="relative cursor-pointer select-none w-9 h-9 flex items-center justify-center"
+            onMouseDown={handlePressStart}
+            onMouseUp={handlePressEnd}
+            onMouseLeave={handlePressEnd}
+            onTouchStart={handlePressStart}
+            onTouchEnd={handlePressEnd}
+            title="Hold to reset conversation"
+          >
+            {/* Background circle */}
+            <div className="absolute inset-0 rounded-full bg-white border border-gray-200 shadow-sm" />
+
+            {/* Progress ring */}
+            {resetProgress > 0 && (
+              <svg className="absolute inset-0 w-full h-full -rotate-90">
+                <circle
+                  cx="50%" cy="50%" r="47%"
+                  fill="none" stroke="#F3D38D" strokeWidth="3"
+                  strokeDasharray={`${resetProgress * 100} 100`}
+                  pathLength="100"
+                  strokeLinecap="round"
+                />
+              </svg>
+            )}
+
+            {/* Icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="relative text-gray-400">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+              <path d="M3 3v5h5"/>
+            </svg>
+          </div>
+          <Link to="/about" className="text-sm font-semibold hover:underline">About William</Link>
+        </div>
       </header>
 
       {/* Hero Card */}
