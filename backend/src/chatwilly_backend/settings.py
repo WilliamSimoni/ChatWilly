@@ -56,6 +56,13 @@ class QdrantConfig(BaseModel):
     vector_size: int = 1536
 
 
+class PostgresConfig(BaseModel):
+    enabled: bool = False
+    url: str = "postgresql://user:password@localhost:5432/chatwilly"
+    session_ttl_seconds: int = 7200  # 2 hours
+    cleanup_interval_seconds: int = 600  # every 10 minutes
+
+
 class Settings(BaseSettings):
     """
     Loads configuration from config.yaml and allows override via environment variables.
@@ -77,6 +84,7 @@ class Settings(BaseSettings):
     # Map the nested configuration
     redis: RedisConfig = RedisConfig()
     qdrant: QdrantConfig = QdrantConfig()
+    postgres: PostgresConfig = PostgresConfig()
 
     # Root level configurations
     debug: bool = False

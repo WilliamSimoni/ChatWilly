@@ -2,6 +2,7 @@ from typing import Annotated, List, TypedDict
 
 from langchain.messages import AIMessage, AnyMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 
@@ -47,7 +48,6 @@ def guardrail_block(state: ChatWillyState):
 
 
 agent_builder = StateGraph(ChatWillyState)
-
 agent_builder.add_node("guardrail_input", guardrail_input)
 agent_builder.add_node("response_generation", response_generation)
 agent_builder.add_node("guardrail_block", guardrail_block)
@@ -59,4 +59,6 @@ agent_builder.add_conditional_edges(
 agent_builder.add_edge("response_generation", END)
 agent_builder.add_edge("guardrail_block", END)
 
-agent = agent_builder.compile()
+
+def build_agent(checkpointer: AsyncPostgresSaver):
+    return agent_builder.compile(checkpointer=checkpointer)

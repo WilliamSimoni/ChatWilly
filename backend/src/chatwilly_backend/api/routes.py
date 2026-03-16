@@ -1,13 +1,20 @@
 import json
 import logging
+import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.params import Depends
 from fastapi.responses import StreamingResponse
 
 from chatwilly_backend.api.rate_limit import RateLimit
-from chatwilly_backend.api.route_models import ChatRequest
-from chatwilly_backend.graph import agent
+from chatwilly_backend.api.route_models import (
+    ChatRequest,
+    ConversationStartEvent,
+    DoneEvent,
+    GuardrailBlockEvent,
+    MessageChunkEvent,
+    ToolCallEvent,
+)
 from chatwilly_backend.settings import global_settings
 
 router = APIRouter()
@@ -26,38 +33,54 @@ logger = logging.getLogger(__name__)
     },
     dependencies=[Depends(RateLimit(global_settings.rate_limit_timeout))],
 )
-async def chat_endpoint(body: ChatRequest):
-    if not body.messages:
-        raise HTTPException(status_code=400, detail="La lista messaggi è vuota.")
+async def chat_endpoint(body: ChatRequest, request: Request):
+    if not body.message:
+        raise HTTPException(status_code=400, detail="Empty message")
 
-    formatted_messages = [msg.model_dump() for msg in body.messages]
+    conversation_id = body.conversation_id or str(uuid.uuid4())
+    agent = request.app.state.agent
+
+    config = {"configurable": {"thread_id": conversation_id}}
+    new_message = body.message.model_dump()
 
     async def event_generator():
+        start_event = ConversationStartEvent(conversation_id=conversation_id)
+        yield f"data: {start_event.model_dump_json()}\n\n"
+
         try:
             async for event in agent.astream_events(
-                {"messages": formatted_messages}, version="v2"
+                {"messages": [new_message]},
+                config=config,
+                version="v2",
             ):
                 kind = event["event"]
                 metadata = event["metadata"]
+                node_name = metadata.get("langgraph_node")
+                checkpoint_ns = metadata.get("checkpoint_ns", "")
+
+                event_model = None
 
                 if kind == "on_chat_model_stream":
-                    node_name = metadata.get("langgraph_node")
-                    checkpoint_ns = metadata.get("checkpoint_ns", "")
-
                     if node_name == "model" and "response_generation" in checkpoint_ns:
                         content = event["data"]["chunk"].content
                         if content:
-                            data = json.dumps({"content": content})
-                            yield f"data: {data}\n\n"
+                            event_model = MessageChunkEvent(content=content)
 
                 elif kind == "on_chain_end" and event["name"] == "guardrail_block":
                     output = event["data"].get("output", {})
                     if "messages" in output and output["messages"]:
                         content = output["messages"][-1].content
-                        data = json.dumps({"content": content})
-                        yield f"data: {data}\n\n"
+                        event_model = GuardrailBlockEvent(content=content)
 
-            yield "data: [DONE]\n\n"
+                elif kind == "on_tool_start":
+                    if node_name == "tools" and "response_generation" in checkpoint_ns:
+                        event_model = ToolCallEvent(name=event["name"])
+
+                if event_model:
+                    yield f"data: {event_model.model_dump_json()}\n\n"
+
+            done_event = DoneEvent()
+            yield f"data: {done_event.model_dump_json()}\n\n"
 
         except Exception as e:
             logger.error(str(e), exc_info=True)
@@ -65,12 +88,3 @@ async def chat_endpoint(body: ChatRequest):
             yield f"data: {error_data}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
-
-
-@router.get("/settings")
-async def get_settings():
-    """
-    Returns the current application settings.
-    Sensitive fields (like API keys and Database URLs) are excluded.
-    """
-    return global_settings.model_dump()

@@ -29,6 +29,23 @@ services:
       timeout: 3s
       retries: 5
 
+  postgres:
+    image: postgres:16-alpine
+    container_name: chatwilly_postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -41,12 +58,15 @@ services:
     environment:
       CONFIG_PATH: /app/config.yaml
       ENV_PATH: /app/.env
-      QDRANT_HOST: qdrant
-      QDRANT_PORT: 6333
+      QDRANT__URL: http://qdrant:6333
+      REDIS__URL: redis://redis:6379
+      POSTGRES__URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     depends_on:
       redis:
         condition: service_healthy
       qdrant:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
     volumes:
       - ./backend:/app
@@ -55,3 +75,4 @@ services:
 volumes:
   redis_data:
   qdrant_data:
+  postgres_data:
