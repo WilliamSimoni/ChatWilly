@@ -1,6 +1,6 @@
 from typing import Annotated, List, TypedDict
 
-from langchain.messages import AIMessage, AnyMessage
+from langchain.messages import AIMessage, AnyMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph import END, START, StateGraph
@@ -15,7 +15,13 @@ class ChatWillyState(TypedDict):
 
 
 async def guardrail_input(state: ChatWillyState):
-    recent_messages = state["messages"][-5:]
+    clean_messages = [
+        m
+        for m in state["messages"]
+        if isinstance(m, (HumanMessage, AIMessage))
+        and (isinstance(m, HumanMessage) or (isinstance(m, AIMessage) and m.content))
+    ]
+    recent_messages = clean_messages[-5:]
     response = await guardrails_agent.ainvoke({"messages": recent_messages})
     guardrail_result = response["structured_response"]
     return {"input_guardrail_passed": guardrail_result.passed}
