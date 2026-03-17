@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Send, User, Brain } from 'lucide-react';
+import { Send, User, Brain, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import logoImg from '../assets/logo.png';
 import profileImg from '../assets/profile.png';
@@ -64,6 +64,16 @@ const ChatPage = () => {
   const [pressTimer, setPressTimer] = useState(null);
   const [resetProgress, setResetProgress] = useState(0);
   const [conversationId, setConversationId] = useState(null);
+  const textareaRef = useRef(null);
+  const abortControllerRef = useRef(null);
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsLoading(false);
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -103,14 +113,21 @@ const ChatPage = () => {
     const userMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
+    if (textareaRef.current) {
+      textareaRef.current.style.height = '56px';
+    }
     setIsLoading(true);
 
     setMessages((prev) => [...prev, { role: 'assistant', content: '', isGuardrail: false }]);
+
+    abortControllerRef.current = new AbortController();
+
 
     try {
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: abortControllerRef.current.signal,
         body: JSON.stringify({
           message: { role: 'user', content: input },
           ...(conversationId && { conversation_id: conversationId }),
@@ -193,12 +210,23 @@ const ChatPage = () => {
         }
       }
     } catch (error) {
-      console.error('Chat error:', error);
-      setMessages((prev) => [
-        ...prev.slice(0, -1),
-        { role: 'assistant', content: "Sorry, I'm having trouble connecting right now." },
-      ]);
+      if (error.name === 'AbortError') {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last.role === 'assistant' && last.content === '') {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } else {
+        console.error('Chat error:', error);
+        setMessages((prev) => [
+          ...prev.slice(0, -1),
+          { role: 'assistant', content: "Sorry, I'm having trouble connecting right now." },
+        ]);
+      }
     } finally {
+      abortControllerRef.current = null;
       setIsLoading(false);
     }
   };
@@ -351,20 +379,48 @@ const ChatPage = () => {
       <div className="fixed bottom-0 left-0 w-full bg-gradient-to-t from-[#FCFAF6] via-[#FCFAF6] to-transparent pt-6 pb-5 px-4 z-50">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <form onSubmit={handleSubmit} className="w-full relative flex items-center">
-            <input
-              type="text"
+            <textarea
+              ref={textareaRef}
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={(e) => {
+                setInput(e.target.value);
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 160) + 'px';
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  if (!isLoading && input.trim()) handleSubmit(e);
+                }
+              }}
               placeholder="Ask about my projects, skills, or magic..."
-              className="w-full bg-white border border-gray-200 rounded-full py-4 pl-6 pr-14 outline-none focus:ring-2 focus:ring-[#F3D38D] shadow-sm transition-all"
-              disabled={isLoading}
+              rows={1}
+              className="w-full bg-white border border-gray-200 rounded-[1.5rem] py-4 pl-6 pr-14 outline-none focus:ring-2 focus:ring-[#F3D38D] shadow-sm transition-all resize-none overflow-hidden leading-relaxed"
+              disabled={false}
+              style={{ minHeight: '56px', maxHeight: '160px' }}
             />
             <button
-              type="submit"
-              disabled={isLoading || !input.trim()}
-              className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-full flex items-center justify-center transition-colors disabled:opacity-50"
+              type={isLoading ? 'button' : 'submit'}
+              onClick={isLoading ? handleStop : undefined}
+              disabled={!isLoading && !input.trim()}
+              className="absolute right-2 bottom-2 w-10 h-10 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-500 rounded-full flex items-center justify-center transition-colors disabled:opacity-50"
             >
-              <Send size={18} />
+              {isLoading ? (
+                <>
+                  <svg className="absolute inset-0 w-full h-full -rotate-90 animate-[spin_2s_linear_infinite]">
+                    <circle
+                      cx="50%" cy="50%" r="47%"
+                      fill="none" stroke="#F3D38D" strokeWidth="3"
+                      strokeDasharray="60 100"
+                      pathLength="100"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <Square size={14} fill="currentColor" />
+                </>
+              ) : (
+                <Send size={18} />
+              )}
             </button>
           </form>
           <p className="text-[10px] font-bold tracking-[0.2em] text-gray-400 mt-4 uppercase">

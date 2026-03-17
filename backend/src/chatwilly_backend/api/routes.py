@@ -53,6 +53,9 @@ async def chat_endpoint(body: ChatRequest, request: Request):
                 config=config,
                 version="v2",
             ):
+                if await request.is_disconnected():
+                    break
+
                 kind = event["event"]
                 metadata = event["metadata"]
                 node_name = metadata.get("langgraph_node")
