@@ -27,6 +27,8 @@ guardrails_agent = create_agent(
     response_format=GuardrailResult,
 )
 
+# ---
+
 response_model = ChatLiteLLM(
     model=global_settings.response_agent_model.model_name,
     base_url=global_settings.response_agent_model.base_url,
@@ -36,6 +38,7 @@ response_model = ChatLiteLLM(
     timeout=30,
     streaming=True,
 )
+
 response_agent = create_agent(
     response_model,
     tools=ALL_TOOLS,
@@ -46,4 +49,16 @@ response_agent = create_agent(
             exit_behavior="end",
         ),
     ],
+)
+
+# --
+
+evaluation_model = ChatLiteLLM(
+    model=global_settings.evaluation_model.model_name,
+    base_url=global_settings.evaluation_model.base_url,
+    api_key=global_settings.evaluation_model.api_key,
+    temperature=global_settings.evaluation_model.temperature,
+    max_tokens=global_settings.evaluation_model.max_tokens,
+    timeout=30,
+    streaming=True,
 )

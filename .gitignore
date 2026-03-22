@@ -234,3 +234,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Eval chatwilly backend
+backend/tests/evals/datasets/*
+backend/tests/evals/results/*

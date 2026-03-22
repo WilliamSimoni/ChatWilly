@@ -92,6 +92,7 @@ class Settings(BaseSettings):
     guardrail_model: GuardrailConfig = GuardrailConfig()
     response_agent_model: AgentConfig = AgentConfig()
     embedding_model: EmbeddingModelConfig = EmbeddingModelConfig()
+    evaluation_model: AIModelConfig = AIModelConfig()
 
     # Configure Pydantic Settings
     model_config = SettingsConfigDict(
