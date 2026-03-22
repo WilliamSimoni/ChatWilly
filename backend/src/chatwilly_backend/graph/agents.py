@@ -1,8 +1,8 @@
 from langchain.agents import create_agent
 from langchain.agents.middleware import ModelCallLimitMiddleware
 from langchain_litellm import ChatLiteLLM
-from pydantic import BaseModel
 
+from chatwilly_backend.graph.output_models import GuardrailResult
 from chatwilly_backend.settings import global_settings
 from chatwilly_backend.tools import ALL_TOOLS
 
@@ -14,17 +14,12 @@ guardrails_model = ChatLiteLLM(
     max_tokens=global_settings.guardrail_model.max_tokens,
     timeout=30,
 )
-
-
-class GuardrailResult(BaseModel):
-    passed: bool
-
-
 guardrails_agent = create_agent(
     guardrails_model,
     tools=[],
     system_prompt=global_settings.guardrail_model.system_prompt,
     response_format=GuardrailResult,
+    checkpointer=False,
 )
 
 # ---
@@ -49,6 +44,7 @@ response_agent = create_agent(
             exit_behavior="end",
         ),
     ],
+    checkpointer=False,
 )
 
 # --
