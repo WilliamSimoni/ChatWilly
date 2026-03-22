@@ -1,7 +1,8 @@
 from chatwilly_knowledge.settings import knowledge_settings
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain_litellm import ChatLiteLLM
+from langchain_openai import OpenAIEmbeddings
 
-extractor_model = ChatOpenAI(
+extractor_model = ChatLiteLLM(
     model=knowledge_settings.extractor_model.model_name,
     base_url=knowledge_settings.extractor_model.base_url,
     api_key=knowledge_settings.extractor_model.api_key,
