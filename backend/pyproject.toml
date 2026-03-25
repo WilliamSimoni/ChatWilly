@@ -27,7 +27,8 @@ dependencies =[
     "tenacity==9.1.4",
     "langgraph-checkpoint-postgres==3.0.4",
     "psycopg[binary,pool]==3.3.3",
-    "APScheduler==3.11.2"
+    "APScheduler==3.11.2",
+    "PyJWT==2.12.1"
 ]
 
 [project.optional-dependencies]

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Send, User, Brain, Square } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
@@ -26,14 +26,11 @@ const TOOL_CALL_PHRASES = [
   'Give me a sec, looking into',
   'Reaching deep into my memory:',
 ];
-
 const getRandomPhrase = () =>
   TOOL_CALL_PHRASES[Math.floor(Math.random() * TOOL_CALL_PHRASES.length)];
 
-// ─── ToolCallPill ─────────────────────────────────────────────────────────────
 const ToolCallPill = ({ name }) => {
   const phraseRef = useRef(getRandomPhrase());
-
   return (
     <div className="flex justify-start w-full">
       <div className="flex items-center gap-2 py-1.5 px-3.5 rounded-full bg-white border border-gray-200 shadow-sm text-[12px] font-semibold text-gray-500 my-1 ml-11">
@@ -52,6 +49,44 @@ const GuardrailBadge = () => (
   </span>
 );
 
+const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? '';
+
+const TurnstileWidget = ({ onVerified, onError }) => {
+  const containerRef = useRef(null);
+  const widgetIdRef = useRef(null);
+
+  useEffect(() => {
+    const init = () => {
+      if (!containerRef.current || widgetIdRef.current !== null) return;
+      widgetIdRef.current = window.turnstile.render(containerRef.current, {
+        sitekey: TURNSTILE_SITE_KEY,
+        execution: 'render',
+        appearance: 'interaction-only',
+        callback: (token) => onVerified(token),
+        'error-callback': () => onError?.(),
+        'expired-callback': () => {
+          window.turnstile.reset(widgetIdRef.current);
+        },
+      });
+    };
+
+    if (window.turnstile) {
+      init();
+    } else {
+      window.turnstile = window.turnstile ?? {};
+      const interval = setInterval(() => {
+        if (window.turnstile?.render) {
+          clearInterval(interval);
+          init();
+        }
+      }, 100);
+      return () => clearInterval(interval);
+    }
+  }, [onVerified, onError]);
+
+  return <div ref={containerRef} className="absolute bottom-20 right-4" />;
+};
+
 // ─── ChatPage ─────────────────────────────────────────────────────────────────
 const ChatPage = () => {
   const [input, setInput] = useState('');
@@ -63,9 +98,43 @@ const ChatPage = () => {
   const [bioExpanded, setBioExpanded] = useState(false);
   const [pressTimer, setPressTimer] = useState(null);
   const [resetProgress, setResetProgress] = useState(0);
-  const [conversationId, setConversationId] = useState(null);
   const textareaRef = useRef(null);
   const abortControllerRef = useRef(null);
+
+
+  const tokenRef = useRef(null);
+  const turnstileTokenRef = useRef(null);
+  const tokenFetchingRef = useRef(false);
+
+  const API_BASE_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://localhost:8000';
+
+  const fetchToken = useCallback(async (turnstileToken) => {
+    if (tokenFetchingRef.current) return null;
+    tokenFetchingRef.current = true;
+    try {
+      const res = await fetch(`${API_BASE_URL}/token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Turnstile-Token': turnstileToken,
+        },
+      });
+      if (!res.ok) throw new Error('Token fetch failed');
+      const { token } = await res.json();
+      tokenRef.current = token;
+      return token;
+    } catch (e) {
+      console.error('Failed to fetch token:', e);
+      return null;
+    } finally {
+      tokenFetchingRef.current = false;
+    }
+  }, [API_BASE_URL]);
+
+  const handleTurnstileVerified = useCallback((cfToken) => {
+    turnstileTokenRef.current = cfToken;
+    fetchToken(cfToken);
+  }, [fetchToken]);
 
   const handleStop = () => {
     if (abortControllerRef.current) {
@@ -91,7 +160,7 @@ const ChatPage = () => {
       if (progress >= 1) {
         clearInterval(interval);
         setMessages([{ role: 'assistant', content: "Hi! I'm ChatWilly. What would you like to know about William?" }]);
-        setConversationId(null);
+        tokenRef.current = null;
         setResetProgress(0);
       }
     }, 16);
@@ -104,39 +173,66 @@ const ChatPage = () => {
     setResetProgress(0);
   };
 
-  const API_BASE_URL = import.meta.env.BACKEND_API_URL || 'http://localhost:8000';
-
+  // ── handleSubmit ──────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
+    let jwt = tokenRef.current;
+    if (!jwt) {
+      const cfToken = turnstileTokenRef.current;
+      if (!cfToken) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: "Just a moment — security check in progress. Please try again in a second!" },
+        ]);
+        return;
+      }
+      jwt = await fetchToken(cfToken);
+      if (!jwt) {
+        setMessages((prev) => [
+          ...prev,
+          { role: 'assistant', content: "Hmm, I couldn't verify you with Cloudflare. Please refresh the page." },
+        ]);
+        return;
+      }
+    }
+
     const userMessage = { role: 'user', content: input };
     setMessages((prev) => [...prev, userMessage]);
     setInput('');
-    if (textareaRef.current) {
-      textareaRef.current.style.height = '56px';
-    }
+    if (textareaRef.current) textareaRef.current.style.height = '56px';
     setIsLoading(true);
-
     setMessages((prev) => [...prev, { role: 'assistant', content: '', isGuardrail: false }]);
-
     abortControllerRef.current = new AbortController();
-
 
     try {
       const response = await fetch(`${API_BASE_URL}/chat`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${jwt}`,
+        },
         signal: abortControllerRef.current.signal,
-        body: JSON.stringify({
-          message: { role: 'user', content: input },
-          ...(conversationId && { conversation_id: conversationId }),
-        }),
+        body: JSON.stringify({ message: { role: 'user', content: input } }),
       });
 
       if (!response.ok) {
         const errorDetail = await response.json();
-        console.error('Backend Validation Error:', errorDetail);
+
+        if (response.status === 401) {
+          tokenRef.current = null;
+          setMessages([
+            {
+              role: 'assistant',
+              content: "Wow, we've been talking for so long that I needed a nap! 😴 I've lost the thread of our conversation, but I'm back and ready for a fresh start. What would you like to know about William?",
+            },
+          ]);
+          setIsLoading(false);
+          return;
+        }
+
+        console.error('Backend error:', errorDetail);
         throw new Error('Network response was not ok');
       }
 
@@ -147,63 +243,34 @@ const ChatPage = () => {
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
-
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
           const lines = chunk.split('\n');
-
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-
             const dataStr = line.substring(6).trim();
-
             let event;
-            try {
-              event = JSON.parse(dataStr);
-            } catch {
-              console.error('Failed to parse SSE JSON:', dataStr);
-              continue;
-            }
+            try { event = JSON.parse(dataStr); } catch { continue; }
 
             const { type } = event;
 
-            if (type === 'conversation_start') {
-              setConversationId(event.conversation_id);
-            }
-
-            if (type === 'done') {
-              done = true;
-              break;
-            }
-
+            if (type === 'done') { done = true; break; }
             if (type === 'message_chunk') {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, content: last.content + event.content },
-                ];
+                return [...prev.slice(0, -1), { ...last, content: last.content + event.content }];
               });
             }
-
             if (type === 'guardrail_block') {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                return [
-                  ...prev.slice(0, -1),
-                  { ...last, content: event.content, isGuardrail: true },
-                ];
+                return [...prev.slice(0, -1), { ...last, content: event.content, isGuardrail: true }];
               });
             }
-
             if (type === 'tool_call') {
               setMessages((prev) => {
                 const last = prev[prev.length - 1];
-                return [
-                  ...prev.slice(0, -1),
-                  { role: 'tool_call', toolName: event.name },
-                  last,
-                ];
+                return [...prev.slice(0, -1), { role: 'tool_call', toolName: event.name }, last];
               });
             }
           }
@@ -213,9 +280,7 @@ const ChatPage = () => {
       if (error.name === 'AbortError') {
         setMessages((prev) => {
           const last = prev[prev.length - 1];
-          if (last.role === 'assistant' && last.content === '') {
-            return prev.slice(0, -1);
-          }
+          if (last.role === 'assistant' && last.content === '') return prev.slice(0, -1);
           return prev;
         });
       } else {
@@ -230,16 +295,18 @@ const ChatPage = () => {
       setIsLoading(false);
     }
   };
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 flex flex-col h-full overflow-hidden relative">
+      <TurnstileWidget
+        onVerified={handleTurnstileVerified}
+        onError={() => console.warn('Turnstile challenge failed')}
+      />
+
       {/* Header */}
       <header className="flex justify-between items-center mb-10">
         <div className="flex items-center">
-          <img
-            src={logoImg}
-            alt="ChatWilly Logo"
-            className="h-12 md:h-16 w-auto object-contain"
-          />
+          <img src={logoImg} alt="ChatWilly Logo" className="h-12 md:h-16 w-auto object-contain" />
         </div>
         <div className="flex items-center gap-3">
           <div
@@ -254,18 +321,15 @@ const ChatPage = () => {
             <div className="absolute inset-0 rounded-full bg-white border border-gray-200 shadow-sm" />
             {resetProgress > 0 && (
               <svg className="absolute inset-0 w-full h-full -rotate-90">
-                <circle
-                  cx="50%" cy="50%" r="47%"
-                  fill="none" stroke="#F3D38D" strokeWidth="3"
-                  strokeDasharray={`${resetProgress * 100} 100`}
-                  pathLength="100"
-                  strokeLinecap="round"
-                />
+                <circle cx="50%" cy="50%" r="47%" fill="none" stroke="#F3D38D" strokeWidth="3"
+                  strokeDasharray={`${resetProgress * 100} 100`} pathLength="100" strokeLinecap="round" />
               </svg>
             )}
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="relative text-gray-400">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-              <path d="M3 3v5h5"/>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+              fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+              className="relative text-gray-400">
+              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
             </svg>
           </div>
           <Link to="/about" className="text-sm font-semibold hover:underline">About William</Link>
@@ -274,7 +338,6 @@ const ChatPage = () => {
 
       {/* Hero Card */}
       <div className="bg-white rounded-[2rem] p-6 md:p-10 shadow-sm flex flex-col md:flex-row gap-8 items-center md:items-start mb-10 border border-gray-100 relative">
-        {/* Mobile */}
         <div className="flex md:hidden w-full items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-[#F3D38D] border-2 border-white shadow-md">
@@ -282,10 +345,8 @@ const ChatPage = () => {
             </div>
             <h1 className="text-xl font-extrabold tracking-tight">WILLIAM SIMONI</h1>
           </div>
-          <button
-            onClick={() => setBioExpanded(!bioExpanded)}
-            className="text-xs font-semibold text-gray-400 underline ml-2 flex-shrink-0"
-          >
+          <button onClick={() => setBioExpanded(!bioExpanded)}
+            className="text-xs font-semibold text-gray-400 underline ml-2 flex-shrink-0">
             {bioExpanded ? 'Less' : 'More'}
           </button>
         </div>
@@ -294,7 +355,6 @@ const ChatPage = () => {
             I'm <strong className="text-black">William</strong>. As I always say, I want to be a <em>Magician</em>. A magician who waves <em className="text-gray-400">dreams</em>, evokes <em className="text-gray-400">laughs</em> and inspires people to live their <em className="text-gray-400">best lives</em>.
           </p>
         )}
-        {/* Desktop */}
         <div className="hidden md:flex w-full gap-8 items-start">
           <div className="w-32 h-32 rounded-full overflow-hidden flex-shrink-0 bg-[#F3D38D] border-4 border-white shadow-md">
             <img src={profileImg} alt="William Simoni" className="w-full h-full object-cover" />
@@ -308,15 +368,10 @@ const ChatPage = () => {
         </div>
       </div>
 
-      {/* Chat Area */}
+      {/* Chat Area — unchanged */}
       <div className="flex-1 overflow-y-auto flex flex-col gap-4 w-full max-w-3xl mx-auto">
         {messages.map((msg, idx) => {
-          // ── Tool call pill ───────────────────────────────────────────────
-          if (msg.role === 'tool_call') {
-            return <ToolCallPill key={idx} name={msg.toolName} />;
-          }
-
-          // ── Regular chat bubble ──────────────────────────────────────────
+          if (msg.role === 'tool_call') return <ToolCallPill key={idx} name={msg.toolName} />;
           return (
             <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} w-full`}>
               {msg.role === 'assistant' && (
@@ -333,10 +388,7 @@ const ChatPage = () => {
                     </div>
                   )}
                 </span>
-
-                {/* Guardrail badge shown above the bubble */}
                 {msg.isGuardrail && <GuardrailBadge />}
-
                 <div className={`p-5 rounded-3xl text-[15px] leading-relaxed shadow-sm ${
                   msg.role === 'user'
                     ? 'bg-white rounded-tr-sm border border-gray-100'
@@ -351,18 +403,16 @@ const ChatPage = () => {
                       <span className="w-2 h-2 bg-gray-500 rounded-full animate-bounce [animation-delay:300ms]" />
                     </span>
                   ) : (
-                    <ReactMarkdown
-                      components={{
-                        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
-                        strong: ({ children }) => <strong className="font-bold">{children}</strong>,
-                        em: ({ children }) => <em className="italic">{children}</em>,
-                        h3: ({ children }) => <h3 className="font-bold text-base mb-1 mt-2">{children}</h3>,
-                        ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                        ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
-                        li: ({ children }) => <li className="mb-1">{children}</li>,
-                        code: ({ children }) => <code className="bg-black/10 rounded px-1 text-sm font-mono">{children}</code>,
-                      }}
-                    >
+                    <ReactMarkdown components={{
+                      p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+                      strong: ({ children }) => <strong className="font-bold">{children}</strong>,
+                      em: ({ children }) => <em className="italic">{children}</em>,
+                      h3: ({ children }) => <h3 className="font-bold text-base mb-1 mt-2">{children}</h3>,
+                      ul: ({ children }) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                      ol: ({ children }) => <ol className="list-decimal ml-4 mb-2">{children}</ol>,
+                      li: ({ children }) => <li className="mb-1">{children}</li>,
+                      code: ({ children }) => <code className="bg-black/10 rounded px-1 text-sm font-mono">{children}</code>,
+                    }}>
                       {msg.content}
                     </ReactMarkdown>
                   )}
@@ -375,7 +425,7 @@ const ChatPage = () => {
         <div className="h-32 md:h-28 flex-shrink-0" />
       </div>
 
-      {/* Input Area */}
+      {/* Input Area — unchanged */}
       <div className="fixed bottom-0 left-0 w-full bg-gradient-to-t from-[#FCFAF6] via-[#FCFAF6] to-transparent pt-6 pb-5 px-4 z-50">
         <div className="max-w-2xl mx-auto flex flex-col items-center">
           <form onSubmit={handleSubmit} className="w-full relative flex items-center">
@@ -396,7 +446,6 @@ const ChatPage = () => {
               placeholder="Ask about my projects, skills, or magic..."
               rows={1}
               className="w-full bg-white border border-gray-200 rounded-[1.5rem] py-4 pl-6 pr-14 outline-none focus:ring-2 focus:ring-[#F3D38D] shadow-sm transition-all resize-none overflow-hidden leading-relaxed"
-              disabled={false}
               style={{ minHeight: '56px', maxHeight: '160px' }}
             />
             <button
@@ -408,13 +457,8 @@ const ChatPage = () => {
               {isLoading ? (
                 <>
                   <svg className="absolute inset-0 w-full h-full -rotate-90 animate-[spin_2s_linear_infinite]">
-                    <circle
-                      cx="50%" cy="50%" r="47%"
-                      fill="none" stroke="#F3D38D" strokeWidth="3"
-                      strokeDasharray="60 100"
-                      pathLength="100"
-                      strokeLinecap="round"
-                    />
+                    <circle cx="50%" cy="50%" r="47%" fill="none" stroke="#F3D38D" strokeWidth="3"
+                      strokeDasharray="60 100" pathLength="100" strokeLinecap="round" />
                   </svg>
                   <Square size={14} fill="currentColor" />
                 </>

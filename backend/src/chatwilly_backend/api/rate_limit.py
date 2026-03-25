@@ -1,9 +1,8 @@
-from fastapi import Request, HTTPException
+from fastapi import HTTPException, Request
 from pyrate_limiter import (
     Limiter,
-    Rate,
-    Duration,
 )
+
 
 def get_client_ip(request: Request) -> str:
     cf_ip = request.headers.get("CF-Connecting-IP")
@@ -14,16 +13,18 @@ def get_client_ip(request: Request) -> str:
         return x_forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
+
 class RateLimit:
     def __init__(self, timeout: int):
         self.timeout = timeout
 
-    def _get_bucket(self, endpoint_path):
+    def _get_bucket(self, endpoint_path: str):
         if endpoint_path == "/chat":
             return "chat_rate_limit_bucket"
-        else:
-            return None
-    
+        elif endpoint_path == "/token":
+            return "token_rate_limit_bucket"
+        return None
+
     async def __call__(self, request: Request):
         bucket_name = self._get_bucket(request.url.path)
         if not bucket_name:
@@ -37,5 +38,5 @@ class RateLimit:
                 raise HTTPException(
                     status_code=429,
                     detail="Too many requests",
-                    headers={"Retry-After": str(int(retry_after))}
+                    headers={"Retry-After": str(int(retry_after))},
                 )

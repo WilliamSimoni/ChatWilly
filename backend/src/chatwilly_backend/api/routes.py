@@ -1,11 +1,15 @@
 import json
 import logging
-import uuid
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.params import Depends
 from fastapi.responses import StreamingResponse
 
+from chatwilly_backend.api.auth import (
+    create_conversation_token,
+    get_conversation_id,
+    verify_turnstile,
+)
 from chatwilly_backend.api.rate_limit import RateLimit
 from chatwilly_backend.api.route_models import (
     ChatRequest,
@@ -23,6 +27,20 @@ logger = logging.getLogger(__name__)
 
 
 @router.post(
+    "/token",
+    dependencies=[Depends(RateLimit(global_settings.rate_limit_timeout))],
+)
+async def issue_token(request: Request):
+    """
+    Issues a signed JWT with a fresh conversation_id.
+    Requires a valid Cloudflare Turnstile token in the header.
+    """
+    turnstile_token = request.headers.get("X-Turnstile-Token", "")
+    await verify_turnstile(turnstile_token)
+    return {"token": create_conversation_token()}
+
+
+@router.post(
     "/chat",
     response_class=StreamingResponse,
     responses={
@@ -33,13 +51,15 @@ logger = logging.getLogger(__name__)
     },
     dependencies=[Depends(RateLimit(global_settings.rate_limit_timeout))],
 )
-async def chat_endpoint(body: ChatRequest, request: Request):
+async def chat_endpoint(
+    body: ChatRequest,
+    request: Request,
+    conversation_id: str = Depends(get_conversation_id),
+):
     if not body.message:
         raise HTTPException(status_code=400, detail="Empty message")
 
-    conversation_id = body.conversation_id or str(uuid.uuid4())
     agent = request.app.state.agent
-
     config = {"configurable": {"thread_id": conversation_id}}
     new_message = body.message.model_dump()
 

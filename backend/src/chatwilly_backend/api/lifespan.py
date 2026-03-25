@@ -57,23 +57,36 @@ async def lifespan(app: FastAPI):
         )
     ]
 
+    token_rate = [
+        Rate(
+            global_settings.rate_limit_token_max_requests,
+            global_settings.rate_limit_token_window_seconds * Duration.SECOND,
+        )
+    ]
+
     if global_settings.redis.enabled:
         logger.info(f"Connecting to Redis at {global_settings.redis.url}...")
         try:
             pool = AsyncConnectionPool.from_url(global_settings.redis.url)
             redis_db = AsyncRedis(connection_pool=pool)
-            bucket = await RedisBucket.init(
+            chat_bucket = await RedisBucket.init(
                 chat_rate, redis_db, bucket_key="chat_rate_limit"
+            )
+            token_bucket = await RedisBucket.init(
+                token_rate, redis_db, bucket_key="token_rate_limit"
             )
             logger.info("Redis Rate Limiter initialized.")
         except Exception as e:
             logger.error(f"Redis connection failed: {e}. Falling back to InMemory.")
-            bucket = InMemoryBucket(chat_rate)
+            chat_bucket = InMemoryBucket(chat_rate)
+            token_bucket = InMemoryBucket(token_rate)
     else:
         logger.info("Redis disabled. Using In-Memory Rate Limiter.")
-        bucket = InMemoryBucket(chat_rate)
+        chat_bucket = InMemoryBucket(chat_rate)
+        token_bucket = InMemoryBucket(token_rate)
 
-    app.state.chat_rate_limit_bucket = bucket
+    app.state.chat_rate_limit_bucket = chat_bucket
+    app.state.token_rate_limit_bucket = token_bucket
 
     if global_settings.postgres.enabled:
         async with postgres_lifespan(app):

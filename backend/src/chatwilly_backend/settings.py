@@ -78,8 +78,10 @@ class Settings(BaseSettings):
 
     # rate limit settings
     rate_limit_max_requests: int = 5
+    rate_limit_token_max_requests: int = 10
     rate_limit_window_seconds: int = 60
     rate_limit_timeout: int = 10
+    rate_limit_token_window_seconds: int = 5
 
     # Map the nested configuration
     redis: RedisConfig = RedisConfig()
@@ -93,6 +95,13 @@ class Settings(BaseSettings):
     response_agent_model: AgentConfig = AgentConfig()
     embedding_model: EmbeddingModelConfig = EmbeddingModelConfig()
     evaluation_model: AIModelConfig = AIModelConfig()
+
+    # authorization
+    jwt_secret: str = "dummy-secret"
+    token_ttl_minutes: int = 120
+    token_algorithm: str = "HS256"
+    turnstile_enabled: bool = True
+    turnstile_secret_token: str = "1x0000000000000000000000000000000AA"
 
     # Configure Pydantic Settings
     model_config = SettingsConfigDict(
