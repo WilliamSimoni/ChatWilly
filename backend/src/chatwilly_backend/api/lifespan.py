@@ -8,6 +8,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from pyrate_limiter import (
     Duration,
     InMemoryBucket,
+    Limiter,
     Rate,
     RedisBucket,
 )
@@ -73,7 +74,7 @@ async def lifespan(app: FastAPI):
         logger.info("Redis disabled. Using In-Memory Rate Limiter.")
         bucket = InMemoryBucket(chat_rate)
 
-    app.state.chat_rate_limit_bucket = bucket
+    app.state.chat_rate_limiter = Limiter(bucket)
 
     if global_settings.postgres.enabled:
         async with postgres_lifespan(app):
