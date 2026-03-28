@@ -1,11 +1,11 @@
 app_name: "ChatWilly"
 app_version: "0.1.0"
 
-rate_limit_max_requests: 5
+rate_limit_max_requests: 20
 rate_limit_window_seconds: 60
 
 redis:
-  enabled: false
+  enabled: true
 
 guardrail_model:
   max_tokens: 500

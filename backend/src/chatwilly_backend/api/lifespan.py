@@ -10,12 +10,12 @@ from pyrate_limiter import (
     InMemoryBucket,
     Limiter,
     Rate,
-    RedisBucket,
 )
 from redis.asyncio import ConnectionPool as AsyncConnectionPool
 from redis.asyncio import Redis as AsyncRedis
 
 from chatwilly_backend.graph.graph import build_agent
+from chatwilly_backend.redis_bucket import TTLRedisBucket
 from chatwilly_backend.scheduled_jobs.cleanup_old_sessions import cleanup_old_sessions
 from chatwilly_backend.settings import global_settings
 
@@ -63,8 +63,11 @@ async def lifespan(app: FastAPI):
         try:
             pool = AsyncConnectionPool.from_url(global_settings.redis.url)
             redis_db = AsyncRedis(connection_pool=pool)
-            bucket = await RedisBucket.init(
-                chat_rate, redis_db, bucket_key="chat_rate_limit"
+            bucket = await TTLRedisBucket.init(
+                chat_rate,
+                redis_db,
+                bucket_key="chat_rate_limit",
+                ttl_seconds=global_settings.rate_limit_window_seconds,
             )
             logger.info("Redis Rate Limiter initialized.")
         except Exception as e:
