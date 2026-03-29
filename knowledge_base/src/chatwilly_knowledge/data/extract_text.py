@@ -24,7 +24,7 @@ def extract_text(filepath):
             doc = Document(filepath)
             for para in doc.paragraphs:
                 text += para.text + "\n"
-        elif ext == "txt":
+        elif ext in ("txt", "md"):
             with open(filepath, "r", encoding="utf-8") as f:
                 text = f.read()
     except Exception as e:
